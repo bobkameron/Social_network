@@ -1,0 +1,40 @@
+
+
+#posts {
+    display: flex;
+    flex-direction:column; 
+    justify-content:center;
+    margin: 5px;
+}
+
+#posts >div {
+    margin: 5px;
+    border:2px solid gray;
+    padding-left: 10%;
+    padding-bottom:10px;
+}
+
+.post-text {
+    white-space: pre-line;
+}
+
+.post-header {
+    white-space: pre-line;
+}
+
+.pagination {
+    text-align:center;
+    margin-left: 15%;
+}
+
+#create_post {
+    border: 2px solid gray;
+    border-radius:10px; 
+    text-align:center; 
+    padding: 5px;
+}
+
+.header {
+    text-align:center;
+    margin: 15px;
+}

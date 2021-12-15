@@ -1,0 +1,43 @@
+<!--    -->  
+
+    <div class="pagination">
+        <span class="step-links">
+            {% if page_obj.has_previous %}
+                <a href="?page=1">&laquo; first</a>
+                <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+            {% endif %}
+    
+            <span class="current">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+            </span>
+    
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}">next</a>
+                <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+            {% endif %}
+        </span>
+    </div>
+
+    <div id = "posts">
+    {% for post in page_obj %}
+        <div id = {{post.id}} class = "post"> 
+            <div class = "post-header">        
+                <a href = "{% url 'profile' post.user.id %}" > {{post.user.username}} </a>
+                {{ post.datetime_created }} 
+                {% if user.is_authenticated %} {% csrf_token %} <button class = "like-button"></button> {% endif %}
+                <span class = "post-likes">{{post.likes.count}}</span> Likes  
+            </div>          
+            {% if post.user.id == user.id %}                            
+                <div class = "edit-text">  
+                    <button class = "edit-button"> Edit Post </button>    
+                    <div class = "edit-area"> 
+                        {% csrf_token %}
+                        <textarea  name="text" required> </textarea>
+                        <button> Save Edit </button>
+                    </div>
+                </div>   
+            {% endif %}   
+            <span class = "post-text"> {{post.text}}     </span>                       
+        </div> 
+    {% endfor %}
+    </div>

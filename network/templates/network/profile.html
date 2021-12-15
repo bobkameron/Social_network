@@ -1,0 +1,27 @@
+{% extends "network/layout.html" %}
+
+{% block body %}
+
+{% if user.is_authenticated %}
+    <span hidden   id = "logged-in">  </span>
+{% endif %}
+
+<h3 class = "header" id = "profile" data-profile_id = {{profile_user.id}} data-user_id = {{user.id}} > 
+    {{profile_user.username}} 
+</h3>
+
+<p class = "header" id = "follow-count"> 
+    Number of Followers: <span id = "number-followers"> {{profile_user.followers.count}} </span>
+    Number Following: <span id = "number-following">  {{profile_user.following.count}}   </span>
+</p>
+
+{% csrf_token %}
+
+
+
+
+
+{% include "network/posts.html" %}
+
+
+{% endblock %}

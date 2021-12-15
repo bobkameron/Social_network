@@ -1,5 +1,25 @@
 {% extends "network/layout.html" %}
 
 {% block body %}
-    TODO
+    
+{% if user.is_authenticated %}
+
+
+<form id = "create_post" action="{% url 'index' %}" method="post">
+    <p>
+        Insert a new post 
+    </p>
+
+    {% csrf_token %}
+    {{ post_form}}
+    <br> 
+    <input class="btn btn-primary" type="submit" value="Submit New Post"> 
+</form>
+
+{% endif  %}
+
+
+{% include "network/posts.html" %}
+
+
 {% endblock %}
