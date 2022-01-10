@@ -27,6 +27,13 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+'''
+CACHE_MIDDLEWARE_ALIAS = 'default'
+
+CACHE_MIDDLEWARE_SECONDS = 1000
+
+CACHE_MIDDLEWARE_KEY_PREFIX = ''
+'''
 
 # Application definition
 
@@ -47,10 +54,26 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware'
+
 ]
 
+"""
+'django.middleware.cache.UpdateCacheMiddleware',
+'django.middleware.common.CommonMiddleware',
+'django.middleware.cache.FetchFromCacheMiddleware'
+"""
+
 ROOT_URLCONF = 'project4.urls'
+
+'''
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+'''
 
 TEMPLATES = [
     {
