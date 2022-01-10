@@ -28,7 +28,6 @@ def getPageObject (listPosts, request ):
 def index(request):
     '''
     Should return view for all posts. This is a get request.
-
     Should also accept POST requests for composing. 
     '''
     post_form = NewPostForm() 
@@ -43,7 +42,6 @@ def index(request):
     listPosts = Post.objects.all()
     return render(request, "network/index.html", {'page_obj': getPageObject(listPosts, request) ,
     'post_form': post_form})
-
 
 def testPosts(listPosts):
     return HttpResponse( [ post.serialize() for post in listPosts ])
@@ -60,7 +58,6 @@ def profile(request, user_id):
         return render (request, 'network/profile.html', { 'message': 'User Does Not Exist'})
 
     listPosts = Post.objects.filter(user = user)
-    # return testPosts(listPosts)
     return render(request, 'network/profile.html', { 'profile_user': user, 
         'page_obj' : getPageObject(listPosts, request)}) 
 
@@ -76,21 +73,10 @@ def following(request):
     for follow in user.following.all():
         set_following.add (follow.follows_user) 
     listPosts = Post.objects.filter(user__in = set_following )
-    #return testPosts(listPosts)
     return render ( request, 'network/following.html', {'page_obj' :getPageObject(listPosts, request)})
 
 @login_required
 def follow (request,user_id):
-    '''
-    GET request:
-    returns JsonResponse of True if logged in user follows, else false. 
-
-    PUT request:
-    follow: True  will make the logged in user a follower of the user_id 
-    follow: False 
-
-    Should make the current logged in user a follower of the user signalled by user_id.
-    '''
 
     if request.method != "PUT" and request.method != "GET":
         return JsonResponse({"error": "Only GET and POST request methods allowed"} ,status = 400)
@@ -131,106 +117,6 @@ def follow (request,user_id):
     following = otherUser.following.count()
     return JsonResponse({"followers":followers, "following":following}, status = 201)
 
-def posts(request):
-    '''
-    Loads the posts that are specified in the request. Request should be a GET method. Returns a 
-    JSON response with the specified posts. 
-
-
-    get request: get first 10 entries.
-
-    get next 10 entries 
-
-    get previous 10 entries 
-
-    GET parameters are: 
-        categories: following, user_id  (else none of these, and we do all )
-        parameters: start, end, previous, and next (or noone, in which case we just load all the ones )
-
-    If the Get request does not have start and end parameters specified, the default is we just 
-    return the first ten entries. 
-
-    returned JSON has a table of up to ten relevant posts, as well as optional booleans:
-    newer, older 
-    indicating whether there are entries that are newer or older than the posts returned. 
-
-    
-    if request.method != "GET":
-        return JsonResponse({"error": "GET request required."}, status=400)
-
-    start_id = request.GET.get('start_id') or -inf 
-    end_id = request.GET.get('end_id') or inf 
-    
-    start_post, end_post = None, None 
-
-    start_time, end_time = None, None 
-
-    if start_id != -inf: 
-        pass 
-    try:
-        start_post = Post.objects.get(id = start_id)     
-    except Post.DoesNotExist:
-        return JsonResponse({"error": "GET request required."}, status=400)
-    
-    if start_post: 
-        pass         
-
-    previous = request.GET.get('previous') or False  
-    next = request.GET.get('next') or False 
-    
-    if previous: 
-        end = 234
-    if next: start = end 
-
-
-    user = request.GET.get('user_id') or None 
-    following = request.GET.get('following') or None 
-    all = request.GET.get('all') or None 
-
-    posts = None 
-
-    newer,older = False,False 
-    if all:
-        if previous:
-            posts = Post.objects.all().order_by('-timestamp','id') 
-            if posts.count() > 10:
-                older = True 
-            JsonResponse()
-            return 
-                
-            
-
-        elif next:
-            pass 
-        else:
-            pass 
-        posts = Post.objects.filter().order_by('-timestamp','id') 
-
-        posts = Post.objects.filter( ).order_by('-timestamp','id') 
-
-
-        posts = Post.objects.filter( 
-            
-             id__gt = start, id__lt = end, datetime_created__gt = start , \
-            datetime_created__lt = end ).order_by('-timestamp','id')[0:10]
-
-        Post.objects.filter(id__gt = start, id__lt = end, ).order_by('-timestamp','id')
-    
-    elif following:
-        if not request.user:
-            return JsonResponse({"error":"error"})
-        
-
-        pass 
-    elif user:
-        pass 
-    else:
-        return JsonResponse({"error":"error"})
-
-    return JsonResponse( posts.serialize )
-    
-    '''
-    pass  
 
 @login_required
 def post(request, post_id):
@@ -267,15 +153,6 @@ def post(request, post_id):
             'text': post.text}, status = 201 )
         else:
             return JsonResponse({"error": "Edited post must have at least one non-whitespace character"}, status=400)
-        '''
-        post_form = NewPostForm(request.POST)
-        if post_form.is_valid():
-            post.text = post_form.cleaned_data['text']
-            post.save() 
-            
-        else:
-            return JsonResponse({"error": "Edited post must be nonempty" }, status= 400 ) 
-        '''
 
     if method == "PUT":
         data = json.loads(request.body)
@@ -303,26 +180,6 @@ def post(request, post_id):
         else:
             return JsonResponse({"error": "Cannot like a post multiple times" }, status = 400)
 
-'''
-@login_required 
-def compose(request): 
-    
-    #Compose a new post via a POST request and return a JSON Response detailing that the compose 
-    #was successful (or not). 
-    #The post request should have a body that is the text of the post. 
-    
-    # Composing a new email must be via POST
-    if request.method != "POST":
-        return JsonResponse({"error": "POST request required."}, status=400)
-    
-    post_form = NewPostForm(request.POST)
-    if post_form.is_valid() :
-        new_post = Post(user = request.user, text = post_form.cleaned_data['text'])
-        new_post.save() 
-        return JsonResponse({"message": "Post successfully created" }, status = 201  )
-    else:
-        return JsonResponse({"error": "Post needs to have multiple characters" }, status= 400 ) 
-'''
 
 def login_view(request):
     if request.method == "POST":
