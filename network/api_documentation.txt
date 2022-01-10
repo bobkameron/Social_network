@@ -1,0 +1,72 @@
+path: '' 
+Index page
+For both GET and POST requests:
+This returns the index page of all the posts on the social network. 
+The POST request requires an authenticated user to give a django csrf cookie
+with their request, and the POST request must have a field 'text' containing a nonempty
+string of charactes representing body of new post. 
+If the POST request is unsuccessful, the form is reloaded on the webpage
+with the body of the previously invalid post. 
+
+---------------------
+path: 'users/<int:user_id>'
+Profile page
+GET 
+Returns the profile page and posts attributed to the user with id specified by user_id. 
+-------------------------
+
+path: 'following'
+GET 
+Page of all users the authenticated user is following. The request must include a 
+django csrf user authentication cookie with the request. 
+
+
+----------------
+The index page, profile page, and following page all support pagination, where a GET request
+to any one supports an optional get parameter of 'page' where one can specify the 
+integer page that one wishes to view (reverse chronological order of posts on each page).
+
+------------------
+path: 'users/<int:user_id>/follow'
+Allows PUT and GET requests.
+
+PUT request allows one to follow or unfollow someone. 
+Specification of PUT request:
+PUT requests require a user authenticated with a django csrf cookie sent with the
+request. If this is not the case, a JSON error response status code 400 is sent back.
+PUT request must be in JSON format and must have a field of 'follow'. Also, the the
+authenticated user sending the request cannot follow himself. Otherwise, JSON error
+response is generated.
+Response to a PUT request if the spec above is obeyed is a JSON object with fields
+'followers' and 'following' representing the number of followers the user has and the
+number of users following the requested user. 
+
+GET request simply returns a JSONResponse with one field: 'follows', which is True
+if the authenticated user follows the requested user_id user, False otherwise.
+
+--------------------------
+path : 'posts/<int:post_id>'
+Allows POST, PUT, and GET requests for logged in authenticated users.
+If post_id is not a valid post id, then a JSON error response is returned. 
+GET request simply returns a JSON object with fields 
+'text': text body of the post, 
+'user_likes': True/False if user likes the post, 
+'likes' : the number of likes for the post
+
+POST and PUT requests must have django csrf cookies sent with the signed in user. 
+If this is not the case, JSON error response status code 400 is sent back. 
+
+POST and PUT request must be in JSON format. POST request is for editing the body of 
+an already existing post. If POST request not in JSON format or post_id is not a valid 
+post id or the POST request does not have the field 'text' then JSON error response
+code is sent back. Otherwise, a JSON response is sent back with the field 'text' containing
+the newly updated body of the post's text. 
+
+PUT request should be a JSON object with field 'like' that is True or False depending on
+if the request from a user wants to like or unlike a post. If the user's request wants to like
+a post they already like or unlike one they don't like, a JSON error response is sent back.
+Otherwise, a JSON response with field 'number_likes' is sent back detailing the number of likes
+the post has. 
+
+
+
