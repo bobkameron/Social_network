@@ -10,55 +10,77 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.db.models import Q
 from django.core.paginator import Paginator
-from django.core.cache import caches 
+
+from timeit import default_timer as timer 
 
 from .models import User, Follow, Post, Like 
 from . forms import NewPostForm 
 
-# name of the cache that we use configured in settings 
-CACHE_ALIAS = 'default'
-
-# This is the cache that we will use 
-cache = caches[CACHE_ALIAS]
+from .cache import * 
+cache = Cache(CACHE_ALIAS)
 
 POSTS_PER_PAGE = 10 
+
+def getPageNumber (request):
+    # assumes request is an HTTP GET request
+    return request.GET.get('page') or 1
 
 def getPageObject (listPosts, request ):
     orderedPosts = listPosts.order_by('-datetime_created')
     paginator = Paginator(orderedPosts, POSTS_PER_PAGE)
 
-    pageNumber = request.GET.get('page') or 1 
+    pageNumber = getPageNumber(request)
     pageObj = paginator.get_page(pageNumber)
     return pageObj
 
 def testPosts(listPosts):
     return HttpResponse( [ post.serialize() for post in listPosts ])
 
+def printTimer(start,end, page, cached = True ):
+    result = "Time to load page " + page + " that: " + str(cached) + " was cached was " + str(end-start)
+    print (result)
+    
 def index(request):
     '''
     Should return view for all posts. This is a get request.
     Should also accept POST requests for composing. 
     '''
-    post_form = NewPostForm() 
-
     if request.method == "POST" and request.user.is_authenticated:
         post_form = NewPostForm(request.POST)
         if post_form.is_valid() :
             new_post = Post(user = request.user, text = post_form.cleaned_data['text'])
             new_post.save() 
-            post_form = NewPostForm()
+            # clear the whole cache if there is a new post 
+            cache.clear()
 
-    '''
+    start = timer() 
+
+    pageNumber = getPageNumber(request)
+
     if request.user.is_authenticated:
-        cachedObj = cache.get_or_set(str(request.user.id),'cached test')
-    '''
+        cacheResult = cache.get(INDEX, pageNumber, request.user.id)
+    else:
+        cacheResult = cache.get(INDEX, pageNumber)
+    if cacheResult is not None:
+        end = timer()
+        printTimer(start,end, INDEX, True )
+        return cacheResult 
 
+    post_form = NewPostForm()
     listPosts = Post.objects.all()
-
     result =  render(request, "network/index.html", {'page_obj': getPageObject(listPosts, request) ,
     'post_form': post_form})
-    
-    return result 
+
+    if request.user.is_authenticated:
+        cache.add(result,INDEX,pageNumber,request.user.id)
+    else:
+        cache.add(result,INDEX,pageNumber)
+
+    end = timer() 
+    printTimer(start,end,INDEX,False)
+
+    return result
+
 
 def profile(request, user_id):
     '''
@@ -66,14 +88,30 @@ def profile(request, user_id):
     Should be able to see all the posts made by user_id. This should show the profile page of the user.
     This is a separate page from index page.  
     '''
+    page_number = getPageNumber(request)
+    if request.user.is_authenticated:
+        cache_result = cache.get(PROFILE,page_number, request.user.id, user_id)
+    else:
+        cache_result = cache.get(PROFILE, page_number, user_id)
+    
+    if cache_result is not None:
+        return cache_result 
+
     try:
         user = User.objects.get(pk = user_id)
+        listPosts = Post.objects.filter(user = user)
+        result =  render(request, 'network/profile.html', { 'profile_user': user, 
+            'page_obj' : getPageObject(listPosts, request)}) 
     except User.DoesNotExist: 
-        return render (request, 'network/profile.html', { 'message': 'User Does Not Exist'})
+        result = render (request, 'network/profile.html', { 'message': 'User Does Not Exist'})
 
-    listPosts = Post.objects.filter(user = user)
-    return render(request, 'network/profile.html', { 'profile_user': user, 
-        'page_obj' : getPageObject(listPosts, request)}) 
+    if request.user.is_authenticated:
+        cache.add(result,PROFILE,page_number, request.user.id, user_id)
+    else:
+        cache.add(result,PROFILE,page_number, user_id)
+
+    return result
+
 
 @login_required
 def following(request):
@@ -81,13 +119,21 @@ def following(request):
     Should show all posts from the users that the logged in user follows. This is a separate page from
     the index page. 
     '''
+    page_number = getPageNumber(request)
+    cache_result = cache.get(FOLLOWING,page_number, request.user.id)
+    if cache_result is not None:
+        return cache_result 
+
     user = User.objects.get(pk = request.user.id )
 
     set_following = set() 
     for follow in user.following.all():
         set_following.add (follow.follows_user) 
     listPosts = Post.objects.filter(user__in = set_following )
-    return render ( request, 'network/following.html', {'page_obj' :getPageObject(listPosts, request)})
+    result= render ( request, 'network/following.html', {'page_obj' :getPageObject(listPosts, request)})
+
+    cache.add(result, PROFILE,page_number,request.user.id)
+    return result 
 
 def user (request,user_id):
 
@@ -122,6 +168,7 @@ def user (request,user_id):
         try:
             newFollow = Follow(follower_user = request.user, follows_user = otherUser)
             newFollow.save() 
+            cache.clear()
             return JsonResponse({"status": "Successfully followed user"}, status = 201)
         except:
             return JsonResponse({"error": "Cannot follow someone you already follow" }, status = 400)
@@ -129,7 +176,8 @@ def user (request,user_id):
     elif request.method == "DELETE":
         try:
             existingFollow = Follow.objects.get(follower_user = request.user, follows_user = otherUser ) 
-            existingFollow.delete() 
+            existingFollow.delete()
+            cache.clear() 
             return JsonResponse({"status": "Successfully unfollowed user"}, status = 204)
         except:
             return JsonResponse({"error": "Cannot unfollow someone you don't follow" }, status = 400)
@@ -207,7 +255,6 @@ def like_post(request, post_id):
 
 def login_view(request):
     if request.method == "POST":
-
         # Attempt to sign user in
         username = request.POST["username"]
         password = request.POST["password"]
@@ -218,11 +265,21 @@ def login_view(request):
             login(request, user)
             return HttpResponseRedirect(reverse("index"))
         else:
-            return render(request, "network/login.html", {
+            cache_login_failure = cache.get ( LOGIN, 'failure')
+            if cache_login_failure is not None: return cache_login_failure
+
+            result =  render(request, "network/login.html", {
                 "message": "Invalid username and/or password."
             })
+            cache.add(result,LOGIN,'failure')
     else:
-        return render(request, "network/login.html")
+        cache_result = cache.get(LOGIN)
+        if cache_result is not None: return cache_result 
+
+        result =  render(request, "network/login.html")
+        cache.add(result, LOGIN)
+    
+    return result 
 
 @login_required
 def logout_view(request):
@@ -239,19 +296,36 @@ def register(request):
         password = request.POST["password"]
         confirmation = request.POST["confirmation"]
         if password != confirmation:
-            return render(request, "network/register.html", {
+            cache_passwords_noMatch = cache.get(REGISTER,'passwordsNoMatch')
+            if cache_passwords_noMatch is not None:
+                return cache_passwords_noMatch
+            result =  render(request, "network/register.html", {
                 "message": "Passwords must match."
             })
+            cache.add(result,REGISTER, 'passwordsNoMatch')
+            return result 
 
         # Attempt to create new user
         try:
             user = User.objects.create_user(username, email, password)
             user.save()
+            cache.clear() 
+
         except IntegrityError:
-            return render(request, "network/register.html", {
+            cache_username_taken = cache.get(REGISTER, 'username_taken')
+            if cache_username_taken is not None: return cache_username_taken
+            result =  render(request, "network/register.html", {
                 "message": "Username already taken."
             })
+            cache.add(result,REGISTER,'username_taken')
+            return result 
+
         login(request, user)
         return HttpResponseRedirect(reverse("index"))
     else:
-        return render(request, "network/register.html")
+        cache_result = cache.get(REGISTER)
+        if cache_result is not None: return cache_result
+        result =  render(request, "network/register.html")
+        
+        cache.add(result,REGISTER)
+        return result 

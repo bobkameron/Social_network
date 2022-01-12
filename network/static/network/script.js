@@ -1,8 +1,10 @@
 
 function getProfileId () {
     let header = document.querySelector('#profile');
-    let profileId = header.dataset.profile_id;
-    return profileId; 
+    if (header !== null) {
+        let profileId = header.dataset.profile_id;
+        return profileId; }
+    return null;
 }
 
 document.addEventListener('DOMContentLoaded', function (event) {
@@ -72,6 +74,8 @@ JsonResponse({'user_follows':response, 'number_followers': followers,
 function setFollowButtonAndFollowers () {
     let followButton = getFollowButton();
     let profileId = getProfileId();
+    if (profileId === null) return;
+
     let numberFollowers = document.querySelector("#number-followers");
     let numberFollowing = document.querySelector("#number-following");
     fetch(`/users/${profileId}/info`, {method: "GET" })
@@ -83,14 +87,15 @@ function setFollowButtonAndFollowers () {
 
         userFollows = result['user_follows'];
         console.log(userFollows, typeof(userFollows), 'follows');
-
-        if (userFollows === true) {
-            followButton.innerHTML = "Unfollow";
-            followButton.dataset.follows = true; 
-        } else {
-            followButton.innerHTML = "Follow";
-            followButton.dataset.follows = false;
-        }
+        if (followButton !== null) {
+            if (userFollows === true) {
+                followButton.innerHTML = "Unfollow";
+                followButton.dataset.follows = true; 
+            } else {
+                followButton.innerHTML = "Follow";
+                followButton.dataset.follows = false;
+            }
+        }   
         numberFollowers.innerHTML = result['number_followers'];
         numberFollowing.innerHTML = result['number_following'];
         console.log(result);  
@@ -100,6 +105,8 @@ function setFollowButtonAndFollowers () {
 }
 
 function addFollowsButton() {
+    setFollowButtonAndFollowers ();
+
     let hidden = document.querySelector('#logged-in');
     if (hidden === null ) return; 
 
@@ -110,7 +117,7 @@ function addFollowsButton() {
     if (profileId === userId) return; 
     followButton = getFollowButton();
     followButton.style.display = 'block';
-    setFollowButtonAndFollowers ();
+    
     followButton.addEventListener( 'click', function (event) {
         clickFollows();
     })
