@@ -40,12 +40,14 @@ function getFollowButton() {
 
 function clickFollows() {
     let button = getFollowButton();
-    let follows = ! (button.dataset.follows === 'true');
-    let jsonBody = JSON.stringify( {'follow': follows } );
-    console.log(jsonBody);
+
+    let follows = button.dataset.follows === 'true';
+    let requestMethod = follows ? "DELETE" : "PUT";     
     let profileId = getProfileId();
-    let csrf = getCSRF();
-    fetch(`/users/${profileId}/follow`, {method: "PUT", body: jsonBody, 
+
+    console.log( 'clickfollows ', 'follows:', follows, 'requestmethod:', requestMethod);    
+
+    fetch(`/users/${profileId}/follow`, {method: requestMethod,
     credentials: 'same-origin', headers: {
         "X-CSRFToken": getCookie("csrftoken")
     }
@@ -53,36 +55,44 @@ function clickFollows() {
     .then(result => {
         if (!result.ok) throw result;
         console.log(result);
+        setFollowButtonAndFollowers(); 
         return result.json();
     }).then(result => {
-        let followers = result['followers'];
-        let following = result['following'];
-        document.querySelector("#number-followers").innerHTML = followers;
-        document.querySelector("#number-following").innerHTML = following; 
-        setFollowButton();
         console.log(result);  
     }).catch( error => {
         console.log(error);
     });
 }
 
+/*
+JsonResponse({'user_follows':response, 'number_followers': followers, 
+        'number_following':following}, status = 200)
+*/
 
-function setFollowButton () {
+function setFollowButtonAndFollowers () {
     let followButton = getFollowButton();
     let profileId = getProfileId();
-    fetch(`/users/${profileId}/follow`, {method: "GET" })
+    let numberFollowers = document.querySelector("#number-followers");
+    let numberFollowing = document.querySelector("#number-following");
+    fetch(`/users/${profileId}/info`, {method: "GET" })
     .then(result => {
         if (!result.ok) throw result;
         console.log(result);
         return result.json();
     }).then(result => {
-        if (result['follows']) {
+
+        userFollows = result['user_follows'];
+        console.log(userFollows, typeof(userFollows), 'follows');
+
+        if (userFollows === true) {
             followButton.innerHTML = "Unfollow";
             followButton.dataset.follows = true; 
         } else {
             followButton.innerHTML = "Follow";
             followButton.dataset.follows = false;
         }
+        numberFollowers.innerHTML = result['number_followers'];
+        numberFollowing.innerHTML = result['number_following'];
         console.log(result);  
     }).catch( error => {
         console.log(error);
@@ -98,15 +108,22 @@ function addFollowsButton() {
     let userId = header.dataset.user_id; 
     
     if (profileId === userId) return; 
-    
+    followButton = getFollowButton();
+    followButton.style.display = 'block';
+    setFollowButtonAndFollowers ();
+    followButton.addEventListener( 'click', function (event) {
+        clickFollows();
+    })
+    /*
     let followCount = document.querySelector('#follow-count');
 
     let followButton = document.createElement('button');
     followButton.style.marginLeft = "45%";
     followButton.id = "follow-button";
     insertAfter(followButton, followCount);
-    setFollowButton();
-    document.querySelector("#follow-button").addEventListener( 'click', function (event) {
-        clickFollows();
-    }); 
+    setFollowButtonAndFollowers();
+    
+    });
+    */
+
 }

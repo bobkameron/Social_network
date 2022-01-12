@@ -1,4 +1,30 @@
-path: '' 
+Format for specification is: 
+
+Client request type, uri, method
+Result of the reqeust 
+
+https '' GET 
+Returns the index page 
+
+https '' POST 
+Composes a new post if the user is logged in and authenticated with a django csrf token 
+
+https 'users/<int:user_id>/follow' GET 
+For logged in user where request includes django csrf token, returns a JSON object with
+fields 'follows': True/false if user follows, 'number_followers': number of followers 
+
+https 'users/<int:user_id>/follow' PUT
+For logged in user the PUT JSON request must have field 'follow': True/False depending on
+if user wants to follow or unfollow the referenced user. Returns Json error if cannot follow 
+
+
+
+
+################################
+
+below is draft 
+
+: '' 
 Index page
 For both GET and POST requests:
 This returns the index page of all the posts on the social network. 

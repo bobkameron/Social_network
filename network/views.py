@@ -10,10 +10,16 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.db.models import Q
 from django.core.paginator import Paginator
+from django.core.cache import caches 
 
 from .models import User, Follow, Post, Like 
-
 from . forms import NewPostForm 
+
+# name of the cache that we use configured in settings 
+CACHE_ALIAS = 'default'
+
+# This is the cache that we will use 
+cache = caches[CACHE_ALIAS]
 
 POSTS_PER_PAGE = 10 
 
@@ -24,6 +30,9 @@ def getPageObject (listPosts, request ):
     pageNumber = request.GET.get('page') or 1 
     pageObj = paginator.get_page(pageNumber)
     return pageObj
+
+def testPosts(listPosts):
+    return HttpResponse( [ post.serialize() for post in listPosts ])
 
 def index(request):
     '''
@@ -39,12 +48,17 @@ def index(request):
             new_post.save() 
             post_form = NewPostForm()
 
-    listPosts = Post.objects.all()
-    return render(request, "network/index.html", {'page_obj': getPageObject(listPosts, request) ,
-    'post_form': post_form})
+    '''
+    if request.user.is_authenticated:
+        cachedObj = cache.get_or_set(str(request.user.id),'cached test')
+    '''
 
-def testPosts(listPosts):
-    return HttpResponse( [ post.serialize() for post in listPosts ])
+    listPosts = Post.objects.all()
+
+    result =  render(request, "network/index.html", {'page_obj': getPageObject(listPosts, request) ,
+    'post_form': post_form})
+    
+    return result 
 
 def profile(request, user_id):
     '''
@@ -75,50 +89,51 @@ def following(request):
     listPosts = Post.objects.filter(user__in = set_following )
     return render ( request, 'network/following.html', {'page_obj' :getPageObject(listPosts, request)})
 
-@login_required
-def follow (request,user_id):
+def user (request,user_id):
 
-    if request.method != "PUT" and request.method != "GET":
-        return JsonResponse({"error": "Only GET and POST request methods allowed"} ,status = 400)
+    if request.method != "PUT" and request.method != "GET" and request.method != "DELETE":
+        return JsonResponse({"error": "Wrong request method"} ,status = 400)
 
-    if request.method == "PUT" and request.user.id == user_id:
-        return JsonResponse({"error": "Cannot follow or unfollow oneself"} ,status = 400)
+    if request.method == "PUT" or request.method == 'DELETE':
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Cannot (un)follow a user without being a logged in"} ,status = 401)
+        elif request.user.id == user_id:
+            return JsonResponse({"error": "Cannot follow or unfollow oneself"} ,status = 400)
+    
     try:
         otherUser = User.objects.get(pk= user_id)
     except User.DoesNotExist:
-        JsonResponse({"error": "Invalid user ID"} ,status = 400)
+        return JsonResponse({"error": "Invalid user ID requested"} ,status = 404)
 
     if request.method == "GET":
-        try:
-            Follow.objects.get(follower_user = request.user, follows_user = otherUser ) 
-            return JsonResponse({'follows':True}, status = 201)
-        except Follow.DoesNotExist:
-            return JsonResponse({'follows':False}, status = 201)
+        followers = otherUser.followers.count()
+        following = otherUser.following.count()
+        response = False   
+        if request.user.is_authenticated:
+            try:
+                Follow.objects.get(follower_user = request.user, follows_user = otherUser)
+                response = True 
+            except: 
+                response = False 
+        return JsonResponse({'user_follows':response, 'number_followers': followers, 
+        'number_following':following}, status = 200)
 
-    data = json.loads(request.body)
-    follow = data.get('follow')
-
-    if follow is None:
-        return JsonResponse({"error": "Put request must have attribute of 'follow' "} ,status = 400)
-
-    if follow:
+    if request.method == "PUT":
         try:
             newFollow = Follow(follower_user = request.user, follows_user = otherUser)
             newFollow.save() 
+            return JsonResponse({"status": "Successfully followed user"}, status = 201)
         except:
-            pass 
-    else:
+            return JsonResponse({"error": "Cannot follow someone you already follow" }, status = 400)
+
+    elif request.method == "DELETE":
         try:
             existingFollow = Follow.objects.get(follower_user = request.user, follows_user = otherUser ) 
             existingFollow.delete() 
+            return JsonResponse({"status": "Successfully unfollowed user"}, status = 204)
         except:
-            pass 
-    followers = otherUser.followers.count()
-    following = otherUser.following.count()
-    return JsonResponse({"followers":followers, "following":following}, status = 201)
+            return JsonResponse({"error": "Cannot unfollow someone you don't follow" }, status = 400)
 
-
-@login_required
 def post(request, post_id):
     ''' 
     Should only allow edits of the specified posts via POST requests or likes/unlikes via PUT requests. 
@@ -127,59 +142,68 @@ def post(request, post_id):
     Also should allow get requests to return the content of the post. 
     '''
     method = request.method 
-    if method != "POST" and method != "PUT" and method != "GET":
-        return JsonResponse({"error": "PUT or POST request required."}, status=400)
+    if method != "PUT" and method != "GET":
+        return JsonResponse({"error": "Wrong request method."}, status=400)
 
     try:
-        post = Post.objects.get(id = post_id) 
+        postObject = Post.objects.get(id = post_id) 
     except Post.DoesNotExist:
-        return JsonResponse({"error": "The post for this post id does not exist."}, status=400)
+        return JsonResponse({"error": "The post for this post id does not exist."}, status=404)
 
     user = request.user 
 
     if method == "GET":
-        likes = len( post.likes.filter (user = user) ) > 0
-        return JsonResponse({ 'text': post.text, 'user_likes': likes, 'likes': post.likes.count() } , status =201 )
+        likes = None 
+        if user.is_authenticated:
+            likes = len( postObject.likes.filter (user = user) ) > 0
+        print(likes)
+        return JsonResponse({ 'text': postObject.text, 'user_likes': likes, 
+        'number_likes': postObject.likes.count() } , status =201 )
 
-    if method == "POST":
-        if post.user.id != user.id :
-            return JsonResponse({"error": "Access unauthorized- users may only edit their posts"}, status=400)
+    if method == "PUT":
+        if not user.is_authenticated:
+            return JsonResponse({"error": "Cannot edit post without being a logged in"} ,status = 401)
+
+        if postObject.user.id != user.id :
+            return JsonResponse({"error": "Access unauthorized- users may only edit their posts"}, status=401)
         data = json.loads(request.body)
         post_text = data.get('text').strip() 
         if len(post_text) > 0:
-            post.text = post_text
-            post.save()
-            return JsonResponse({"message": "Post successfully edited" ,
-            'text': post.text}, status = 201 )
+            postObject.text = post_text
+            postObject.save()
+            return JsonResponse({"message": "Post successfully edited"}, status = 201 )
         else:
             return JsonResponse({"error": "Edited post must have at least one non-whitespace character"}, status=400)
 
-    if method == "PUT":
-        data = json.loads(request.body)
-        like = data.get('like')
-        if like is None :
-            return JsonResponse({"error": "The PUT request must have like attribute" }, status = 400)
-        try: 
-            current = Like.objects.get(user = user, post = post )       
-        except Like.DoesNotExist:
-            # if like does not exist, then we need to create a new like if like is true 
-            if like:
-                newLike = Like(user = user, post = post )
-                newLike.save() 
-                numberLikes = post.likes.count()
-                return JsonResponse({"message": "Successfully liked post" ,
-                "number_likes": numberLikes}, status = 201  )
-            else: 
-                return JsonResponse({"error": "Cannot unlike a post that you don't like" }, status = 400)
-        # if the current like exist, then only delete if like is false 
-        if not like:
-            current.delete()
-            numberLikes = post.likes.count() 
-            return JsonResponse({"message": "Successfully unliked post",
-            "number_likes": numberLikes }, status = 201  )
-        else:
-            return JsonResponse({"error": "Cannot like a post multiple times" }, status = 400)
+@login_required 
+def like_post(request, post_id):
+    method = request.method
 
+    try:
+        postObject = Post.objects.get(id = post_id) 
+    except Post.DoesNotExist:
+        return JsonResponse({"error": "The post for this post id does not exist."}, status=404)
+
+    user = request.user 
+
+    if method == "PUT":
+        try:
+            Like.objects.get(user = user, post = postObject)
+            return JsonResponse({"error": "Cannot like a post multiple times" }, status = 400)
+        except:
+            newLike = Like(user = user, post = postObject )
+            newLike.save() 
+            return JsonResponse({"message": "Successfully liked post" } ,status = 201   )
+    
+    elif method == 'DELETE':
+        try:
+            currentLike = Like.objects.get(user = user, post = postObject)
+            currentLike.delete() 
+            return JsonResponse({"message": "Successfully unliked post"}, status = 201  ) 
+        except:
+            return JsonResponse({"error": "Cannot unlike a post you don't like" }, status = 401)
+    else:
+        return JsonResponse({'error': "Wrong request method type" }, status = 400)
 
 def login_view(request):
     if request.method == "POST":

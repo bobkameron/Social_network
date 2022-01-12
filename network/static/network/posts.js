@@ -1,50 +1,90 @@
-
-
-
 document.addEventListener('DOMContentLoaded', function (event) {
     showOnlyEditButtons();   
-    showLikeButtons();
-} ); 
+    updateAllPosts();
+    addLikeButtonEventListeners();
+}); 
 
-function showLikeButtons() {
-    let likeButtons = document.querySelectorAll(".like-button"); 
-    for (let button of likeButtons) {
-        let postId = getPostDiv(button).id;
-        fetch(`/posts/${postId}`) 
-        .then(result => {
-            if (!result.ok) throw result;
-            console.log(result);
-            return result.json();
-        })
-        .then(result => {
-            console.log(result);
-            let likes = result['user_likes'];
-            button.innerHTML = "1234";
-            if (likes) {
-                console.log(likes);
-                button.innerHTML = "Unlike";
+// return JsonResponse({ 'text': postObject.text, 'user_likes': likes, 
+// 'number_likes': postObject.likes.count() } , status =201 )
+
+//  return JsonResponse({"message": "Post successfully edited"}, status = 201 ) 
+//PUT request with 'text' field
+
+function updatePost(post) {
+    fetch(`/posts/${post.id}`) 
+    .then(result => {
+        if (!result.ok) throw result;
+        console.log(result);
+        return result.json();
+    })
+    .then(result => {
+        console.log(result);
+        let number_likes = result['number_likes'];
+        let user_likes = result['user_likes'] === true;
+        let text = result['text'];
+
+        post.querySelector('.post-likes').innerHTML = number_likes;            
+        post.querySelector('.post-text').innerHTML = text ;
+
+        let button = post.querySelector('.like-button');
+        console.log('likes');
+        console.log(result['user_likes'], typeof(result['user_likes']), user_likes, typeof(user_likes)  );
+
+        if (button !== null) {
+            if (user_likes) {
                 button.dataset.likes = true;
+                button.innerHTML = "Unlike";
             } else {
-                console.log(likes);
-                button.innerHTML = "Like";
-                button.dataset.likes = false; 
+                button.dataset.likes = false;
+                button.innerHTML = "Like";  
             }
-        })
-        .catch( error => {
-            console.log(error);
-        });
-        button.addEventListener('click' , function() {
-            likePost(button);
-        })
+        } 
+    })
+    .catch( error => {
+        console.log(error);
+    });
+}
+
+function addLikeButtonEventListeners() {
+    let likeButtons = document.querySelectorAll(".like-button");
+    for (let button of likeButtons) {
+        if (button !== null) {
+            button.addEventListener('click' , function() {
+                likePost(button);
+            })
+        }
     }
+}
+
+function updateAllPosts() {
+    let posts = document.querySelectorAll(".post");
+    for (let post of posts) { 
+        updatePost(post);
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 function likePost(button) {
     let postId = getPostDiv(button).id;
-    let likes = button.dataset.likes === 'true'; 
-    let jsonBody = JSON.stringify({ 'like': !likes});
+    let user_likes = button.dataset.likes === 'true';
+    let requestMethod = user_likes === true ? "DELETE" : "PUT"; 
 
-    fetch(`/posts/${postId}`, {method: "PUT", body: jsonBody, 
+    fetch(`/posts/${postId}/like`, {method: requestMethod, 
     credentials: 'same-origin', headers: {
         "X-CSRFToken": getCookie("csrftoken")
     }
@@ -56,20 +96,13 @@ function likePost(button) {
     })
     .then( result => {
         console.log(result);
-        button.dataset.likes = !likes;
-        if (likes) {
-            button.innerHTML = "Like";
-        } else {
-            button.innerHTML = "Unlike";
-        }
-        getPostDiv(button).querySelector(".post-likes").innerHTML = result["number_likes"];
+        updatePost(getPostDiv(button));
     })
     .catch( error => {
         console.log(error);
     }
     );
 }
-
 
 function getPostDiv (element) {
     while (element.className != 'post') {
@@ -109,7 +142,7 @@ function showEditPost(button) {
                 alert ("The edited text must have at least one non whitespace character");
             } else {
                 let jsonBody = JSON.stringify( {'text': text });
-                fetch (`/posts/${postDiv.id}`, {method:"POST", body: jsonBody,
+                fetch (`/posts/${postDiv.id}`, {method:"PUT", body: jsonBody,
                    credentials: 'same-origin', headers: {
                     "X-CSRFToken": getCookie("csrftoken")
                 } })
@@ -118,8 +151,11 @@ function showEditPost(button) {
                     console.log(result);
                     return result.json(); }
                 ).then( result=> {
+                    /*
                     let newText = result['text'];
                     content.innerHTML = newText; 
+                    */
+                    updatePost(getPostDiv(button));
                     sibling.style.display = 'none';
                     content.style.display = 'inline';
                     button.style.display = 'inline-block';

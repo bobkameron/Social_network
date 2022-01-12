@@ -28,12 +28,15 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 '''
+add these only for general per site caching. 
+
 CACHE_MIDDLEWARE_ALIAS = 'default'
 
 CACHE_MIDDLEWARE_SECONDS = 1000
 
 CACHE_MIDDLEWARE_KEY_PREFIX = ''
 '''
+
 
 # Application definition
 
@@ -55,10 +58,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware'
-
 ]
 
 """
+Add these lines to MIDDLEWARE only to enable whole site caching
+
 'django.middleware.cache.UpdateCacheMiddleware',
 'django.middleware.common.CommonMiddleware',
 'django.middleware.cache.FetchFromCacheMiddleware'
@@ -66,14 +70,12 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'project4.urls'
 
-'''
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379',
     }
 }
-'''
 
 TEMPLATES = [
     {
